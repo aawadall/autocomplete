@@ -1,5 +1,15 @@
-use tonic::{transport::Server, Request, Response, Status};
+use std::net::SocketAddr;
+use tonic::{transport::Server as TonicServer, Request, Response, Status};
+use axum::{
+    routing::{get, post},
+    Router,
+    extract::State,
+    response::IntoResponse,
+    Json,
+};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use crate::autocomplete::{Autocomplete, Autocomplete2};
+use crate::graphql::{create_schema, AppSchema};
 
 pub mod autocomplete_proto {
     tonic::include_proto!("autocomplete");
@@ -72,18 +82,47 @@ impl AutocompleteService for AutocompleteServiceImpl {
     }
 }
 
-pub async fn run_server(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let addr = addr.parse()?;
-    let service = AutocompleteServiceImpl {
-        autocomplete: Autocomplete::new(),
+async fn graphql_handler(
+    State(schema): State<AppSchema>,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
+    schema.execute(req.into_inner()).await.into()
+}
+
+async fn graphql_playground() -> impl IntoResponse {
+    async_graphql::http::playground_source(
+        async_graphql::http::GraphQLPlaygroundConfig::new("/graphql")
+    )
+}
+
+pub async fn run_server(grpc_addr: &str, graphql_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let autocomplete = Autocomplete::new();
+    let schema = create_schema(autocomplete.clone());
+    
+    // Create gRPC service
+    let grpc_service = AutocompleteServiceImpl {
+        autocomplete: autocomplete.clone(),
     };
 
-    println!("Autocomplete server listening on {}", addr);
+    // Create GraphQL router
+    let app = Router::new()
+        .route("/graphql", post(graphql_handler))
+        .route("/playground", get(graphql_playground))
+        .with_state(schema);
 
-    Server::builder()
-        .add_service(AutocompleteServiceServer::new(service))
-        .serve(addr)
-        .await?;
+    // Start both servers
+    let grpc_addr = grpc_addr.parse()?;
+    let graphql_addr = graphql_addr.parse()?;
+
+    println!("gRPC server listening on {}", grpc_addr);
+    println!("GraphQL server listening on {}", graphql_addr);
+
+    tokio::join!(
+        TonicServer::builder()
+            .add_service(AutocompleteServiceServer::new(grpc_service))
+            .serve(grpc_addr),
+        axum::Server::bind(&graphql_addr).serve(app.into_make_service())
+    );
 
     Ok(())
 } 

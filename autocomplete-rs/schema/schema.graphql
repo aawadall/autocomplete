@@ -1,0 +1,41 @@
+type Query {
+    # Get completions for a prefix
+    complete(prefix: String!, maxResults: Int): CompleteResponse!
+    
+    # Get system statistics
+    stats: Stats!
+}
+
+type Mutation {
+    # Initialize the autocomplete system with strings and scores
+    init(strings: [StringScoreInput!]!): InitResponse!
+}
+
+# Input type for string with score
+input StringScoreInput {
+    text: String!
+    score: Float!
+}
+
+# Response type for completions
+type CompleteResponse {
+    completions: [Completion!]!
+}
+
+# A single completion result
+type Completion {
+    text: String!
+    score: Float!
+}
+
+# Response type for initialization
+type InitResponse {
+    success: Boolean!
+    error: String
+}
+
+# System statistics
+type Stats {
+    numTerms: Int!
+    memoryBytes: Int!
+} 
