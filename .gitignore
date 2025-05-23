@@ -1,8 +1,23 @@
 # Rust specific
 /target/
+**/target/
 **/*.rs.bk
 Cargo.lock
 *.pdb
+
+# Protocol Buffers
+*.pb.h
+*.pb.cc
+*.pb.go
+*.pb.swift
+*.pb.dart
+*.pb.js
+*.pb.ts
+*.pb.rs
+
+# Generated Rust files
+/src/autocomplete_proto.rs
+/src/autocomplete_proto/*.rs
 
 # C++ specific
 *.o
@@ -51,18 +66,31 @@ Cargo.lock
 
 # Build directories
 /build/
+**/build/
 /debug_build/
+**/debug_build/
 /CMakeFiles/
+**/CMakeFiles/
 /CMakeCache.txt
+**/CMakeCache.txt
 /CMakeScripts/
+**/CMakeScripts/
 /Testing/
+**/Testing/
 /Makefile
+**/Makefile
 /cmake_install.cmake
+**/cmake_install.cmake
 /install_manifest.txt
+**/install_manifest.txt
 /compile_commands.json
+**/compile_commands.json
 /CTestTestfile.cmake
+**/CTestTestfile.cmake
 /_deps
+**/_deps
 /.cmake
+**/.cmake
 
 # IDE specific
 .vscode/

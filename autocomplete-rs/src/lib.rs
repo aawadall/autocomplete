@@ -1,7 +1,19 @@
 pub mod constants;
 pub mod parameters;
 pub mod probe;
+pub mod types;
+pub mod string_pool;
+pub mod trie;
+pub mod dictionary;
+pub mod index;
+pub mod autocomplete;
 
 pub use constants::*;
 pub use parameters::*;
-pub use probe::*; 
+pub use probe::*;
+pub use types::*;
+pub use string_pool::*;
+pub use trie::*;
+pub use dictionary::*;
+pub use index::*;
+pub use autocomplete::*; 

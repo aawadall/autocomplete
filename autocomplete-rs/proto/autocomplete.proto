@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package autocomplete;
+
+// The autocomplete service definition
+service AutocompleteService {
+  // Get completions for a prefix
+  rpc Complete (CompleteRequest) returns (CompleteResponse) {}
+  
+  // Initialize the autocomplete system with strings and scores
+  rpc Init (InitRequest) returns (InitResponse) {}
+  
+  // Get system statistics
+  rpc GetStats (StatsRequest) returns (StatsResponse) {}
+}
+
+// Request message for completion
+message CompleteRequest {
+  string prefix = 1;
+  int32 max_results = 2;  // Optional: limit number of results
+}
+
+// Response message containing completions
+message CompleteResponse {
+  repeated Completion completions = 1;
+}
+
+// A single completion result
+message Completion {
+  string text = 1;
+  float score = 2;
+}
+
+// Request message for initialization
+message InitRequest {
+  repeated StringScore strings = 1;
+}
+
+// A string with its score
+message StringScore {
+  string text = 1;
+  float score = 2;
+}
+
+// Response message for initialization
+message InitResponse {
+  bool success = 1;
+  string error = 2;  // Empty if success is true
+}
+
+// Request message for stats
+message StatsRequest {}
+
+// Response message containing system statistics
+message StatsResponse {
+  int32 num_terms = 1;
+  int64 memory_bytes = 2;
+} 
