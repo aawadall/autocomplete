@@ -1,3 +1,45 @@
+# Autocomplete System
+
+This repository contains an autocomplete system implementation. The original C++ implementation is being ported to Rust and will be containerized for easier deployment and testing.
+
+## Project Structure
+
+- `autocomplete-rs/`: The Rust port of the original C++ implementation
+- `archive/`: Original C++ implementation and related files
+
+## Goals
+
+1. Port the C++ implementation to Rust while maintaining the same functionality
+2. Leverage Rust's safety guarantees and modern tooling
+3. Containerize the application using Docker for easy deployment and testing
+
+## Current Status
+
+The porting process is ongoing. The following components have been ported to Rust:
+
+- Basic constants and configuration
+- Parameters management
+- Performance measurement probes
+
+## Building and Testing
+
+### Original C++ Implementation
+```bash
+cd archive
+make
+```
+
+### Rust Implementation
+```bash
+cd autocomplete-rs
+cargo build
+cargo test
+```
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
 Autocomplete
 ------------
 
