@@ -44,15 +44,23 @@ classDiagram
     }
 
     class ScoredStringPool {
-        -vector~string~ strings
-        -vector~float~ scores
-        -size_t size
-        -size_t capacity
-        +insert(string, float)
-        +get_score(size_t)
-        +get_string(size_t)
-        +update_score(size_t, float)
+        -vector~id_type~ m_scores
+        -vector~size_t~ m_offsets
+        -vector~uint8_t~ m_data
+        +init()
+        +resize(size_t, uint32_t)
         +clear()
+        +size()
+        +bytes()
+        +data()
+        +push_back_offset(size_t)
+        +scores()
+        +const_scores()
+    }
+
+    class ScoredByteRange {
+        +byte_range string
+        +id_type score
     }
 
     class TrieNode {
@@ -85,6 +93,15 @@ classDiagram
         +decompress(uint32_t)
     }
 
+    class IntegerFCDictionary {
+        -vector~uint32_t~ m_headers
+        -vector~uint8_t~ m_buckets
+        -size_t m_size
+        +build(vector~string~)
+        +lookup(uint32_t)
+        +extract(id_type, completion_type)
+    }
+
     class Block {
         -vector~uint32_t~ doc_ids
         -uint32_t min_doc_id
@@ -104,12 +121,78 @@ classDiagram
         +clear()
     }
 
+    class CompactVector {
+        -vector~uint64_t~ m_bits
+        -uint8_t m_width
+        -uint64_t m_mask
+        +build(vector~uint64_t~)
+        +access(uint64_t)
+        +size()
+    }
+
+    class BitVector {
+        -vector~uint64_t~ m_bits
+        -size_t m_size
+        +build(bit_vector_builder*)
+        +size()
+        +bytes()
+        +operator[](uint64_t)
+        +get_bits(uint64_t, uint64_t)
+    }
+
+    class MinHeap {
+        -vector~T~ m_q
+        -Comparator m_comparator
+        +reserve(uint64_t)
+        +top()
+        +push(T)
+        +pop()
+        +clear()
+        +empty()
+        +size()
+    }
+
     class Autocomplete {
         -Parameters params
         -ScoredStringPool string_pool
         -CompletionTrie trie
         -FCDictionary dictionary
         -InvertedIndex index
+        +build_index(string)
+        +complete(string)
+        +search(vector~string~)
+    }
+
+    class Autocomplete2 {
+        -Parameters params
+        -ScoredStringPool string_pool
+        -CompletionTrie trie
+        -FCDictionary dictionary
+        -InvertedIndex index
+        -CompactVector docid_to_lexid
+        +build_index(string)
+        +complete(string)
+        +search(vector~string~)
+    }
+
+    class Autocomplete3 {
+        -Parameters params
+        -ScoredStringPool string_pool
+        -CompletionTrie trie
+        -FCDictionary dictionary
+        -InvertedIndex index
+        -MinHeap min_priority_queue
+        +build_index(string)
+        +complete(string)
+        +search(vector~string~)
+    }
+
+    class Autocomplete4 {
+        -Parameters params
+        -ScoredStringPool string_pool
+        -CompletionTrie trie
+        -FCDictionary dictionary
+        -BlockedInvertedIndex index
         +build_index(string)
         +complete(string)
         +search(vector~string~)
@@ -126,6 +209,13 @@ classDiagram
     Autocomplete *-- InvertedIndex
     CompletionTrie *-- TrieNode
     InvertedIndex *-- Block
+    ScoredStringPool *-- ScoredByteRange
+    Autocomplete2 --|> Autocomplete
+    Autocomplete3 --|> Autocomplete
+    Autocomplete4 --|> Autocomplete
+    Autocomplete3 *-- MinHeap
+    Autocomplete2 *-- CompactVector
+    Autocomplete4 *-- BlockedInvertedIndex
 ```
 
 ## Component Dependencies
@@ -135,17 +225,26 @@ graph TD
     subgraph Core
         Parameters
         Probe
+        Timer
     end
 
     subgraph Data Structures
         ScoredStringPool
         CompletionTrie
         FCDictionary
+        IntegerFCDictionary
         InvertedIndex
+        BlockedInvertedIndex
+        CompactVector
+        BitVector
+        MinHeap
     end
 
     subgraph Implementation
         Autocomplete
+        Autocomplete2
+        Autocomplete3
+        Autocomplete4
     end
 
     %% Dependencies
@@ -153,11 +252,16 @@ graph TD
     Parameters --> CompletionTrie
     Parameters --> FCDictionary
     Parameters --> InvertedIndex
+    Parameters --> IntegerFCDictionary
     
     ScoredStringPool --> Autocomplete
     CompletionTrie --> Autocomplete
     FCDictionary --> Autocomplete
     InvertedIndex --> Autocomplete
+    IntegerFCDictionary --> Autocomplete2
+    CompactVector --> Autocomplete2
+    MinHeap --> Autocomplete3
+    BlockedInvertedIndex --> Autocomplete4
 
     style Core fill:#f9f,stroke:#333,stroke-width:2px
     style Data Structures fill:#9f9,stroke:#333,stroke-width:2px
@@ -176,6 +280,8 @@ graph TD
         Data --> Trie[Trie Nodes]
         Data --> Dict[Dictionary]
         Data --> Index[Inverted Index]
+        Data --> Compact[Compact Vectors]
+        Data --> BitVec[Bit Vectors]
     end
 
     style Memory Organization fill:#f9f,stroke:#333,stroke-width:2px
@@ -192,10 +298,18 @@ graph TD
 - **ScoredStringPool**: String and score management
 - **CompletionTrie**: Prefix-based completion
 - **FCDictionary**: String compression
+- **IntegerFCDictionary**: Integer-based dictionary
 - **InvertedIndex**: Term-based search
+- **BlockedInvertedIndex**: Blocked term-based search
+- **CompactVector**: Space-efficient vector
+- **BitVector**: Bit-level operations
+- **MinHeap**: Priority queue implementation
 
 ### Main Implementation
-- **Autocomplete**: Orchestrates all components
+- **Autocomplete**: Base implementation
+- **Autocomplete2**: Integer-based optimization
+- **Autocomplete3**: Min-heap based optimization
+- **Autocomplete4**: Blocked index optimization
 
 ## Usage Example
 
