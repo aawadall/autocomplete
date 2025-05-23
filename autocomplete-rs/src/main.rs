@@ -7,7 +7,6 @@ mod server;
 mod string_pool;
 mod trie;
 mod types;
-mod utils;
 
 /// Autocomplete service with gRPC and GraphQL support
 #[derive(Parser, Debug)]

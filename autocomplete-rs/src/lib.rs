@@ -7,6 +7,8 @@ pub mod trie;
 pub mod dictionary;
 pub mod index;
 pub mod autocomplete;
+pub mod graphql;
+pub mod server;
 
 pub use constants::*;
 pub use parameters::*;

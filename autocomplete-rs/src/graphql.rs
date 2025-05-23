@@ -1,5 +1,7 @@
-use async_graphql::{Object, Schema, SimpleObject, InputObject};
+use async_graphql::{Object, Schema, SimpleObject, InputObject, EmptySubscription};
 use crate::autocomplete::Autocomplete;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[derive(SimpleObject)]
 struct Completion {
@@ -31,13 +33,14 @@ struct StringScoreInput {
 }
 
 pub struct QueryRoot {
-    autocomplete: Autocomplete,
+    autocomplete: Arc<Mutex<Autocomplete>>,
 }
 
 #[Object]
 impl QueryRoot {
-    async fn complete(&self, prefix: String, max_results: Option<i32>) -> CompleteResponse {
-        let completions = self.autocomplete.complete(&prefix);
+    async fn complete(&self, prefix: String, _max_results: Option<i32>) -> CompleteResponse {
+        let autocomplete = self.autocomplete.lock().await;
+        let completions = autocomplete.complete(&prefix);
         let completions = completions.into_iter()
             .map(|(text, score)| Completion { text, score })
             .collect();
@@ -46,15 +49,16 @@ impl QueryRoot {
     }
 
     async fn stats(&self) -> Stats {
+        let autocomplete = self.autocomplete.lock().await;
         Stats {
-            num_terms: self.autocomplete.num_terms() as i32,
-            memory_bytes: self.autocomplete.bytes() as i64,
+            num_terms: autocomplete.num_terms() as i32,
+            memory_bytes: autocomplete.bytes() as i64,
         }
     }
 }
 
 pub struct MutationRoot {
-    autocomplete: Autocomplete,
+    autocomplete: Arc<Mutex<Autocomplete>>,
 }
 
 #[Object]
@@ -65,7 +69,8 @@ impl MutationRoot {
             .map(|s| (s.text, s.score))
             .collect();
             
-        match self.autocomplete.init(&strings) {
+        let mut autocomplete = self.autocomplete.lock().await;
+        match autocomplete.init(&strings) {
             Ok(_) => InitResponse {
                 success: true,
                 error: None,
@@ -78,13 +83,13 @@ impl MutationRoot {
     }
 }
 
-pub type AppSchema = Schema<QueryRoot, MutationRoot>;
+pub type AppSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 
-pub fn create_schema(autocomplete: Autocomplete) -> AppSchema {
+pub fn create_schema(autocomplete: Arc<Mutex<Autocomplete>>) -> AppSchema {
     Schema::build(
         QueryRoot { autocomplete: autocomplete.clone() },
         MutationRoot { autocomplete },
-        async_graphql::EmptySubscription,
+        EmptySubscription,
     )
     .finish()
 } 

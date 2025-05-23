@@ -1,10 +1,11 @@
-use std::ops::Range;
-
 /// Type alias for document and term IDs
 pub type IdType = u32;
 
 /// Type alias for completion type (vector of term IDs)
 pub type CompletionType = Vec<IdType>;
+
+/// Type alias for score type
+pub type ScoreType = f32;
 
 /// Represents a range of values
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,8 +49,18 @@ impl ScoredRange {
 /// Represents a byte range
 #[derive(Debug, Clone, Copy)]
 pub struct ByteRange {
-    pub begin: *const u8,
-    pub end: *const u8,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl ByteRange {
+    pub fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
 }
 
 /// Represents a range of 32-bit integers
@@ -78,9 +89,10 @@ pub mod global {
 
 /// Convert a string to a byte range
 pub fn string_to_byte_range(s: &str) -> ByteRange {
-    let begin = s.as_ptr();
-    let end = unsafe { begin.add(s.len()) };
-    ByteRange { begin, end }
+    ByteRange {
+        start: 0,
+        end: s.len(),
+    }
 }
 
 /// Convert a completion to a uint32 range

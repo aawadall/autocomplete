@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use crate::types::{IdType, global};
+use crate::types::IdType;
 
 /// Block in the inverted index
 struct Block {
@@ -32,8 +31,7 @@ impl Block {
 
 /// Blocked inverted index for efficient document retrieval
 pub struct BlockedInvertedIndex {
-    blocks: Vec<Block>,
-    term_to_block: HashMap<IdType, usize>,
+    blocks: Vec<Vec<IdType>>,
     block_size: usize,
 }
 
@@ -42,47 +40,21 @@ impl BlockedInvertedIndex {
     pub fn new(block_size: usize) -> Self {
         Self {
             blocks: Vec::new(),
-            term_to_block: HashMap::new(),
             block_size,
         }
     }
 
     /// Add a document to the index
-    pub fn add_doc(&mut self, term_id: IdType, doc_id: IdType) {
-        let block_idx = self.term_to_block.entry(term_id).or_insert_with(|| {
-            self.blocks.push(Block::new(term_id));
-            self.blocks.len() - 1
-        });
-
-        let block = &mut self.blocks[*block_idx];
-        block.add_doc(doc_id);
-
-        // If block is full, create a new one
-        if block.size() >= self.block_size {
-            self.blocks.push(Block::new(term_id));
-            *block_idx = self.blocks.len() - 1;
+    pub fn insert(&mut self, id: IdType) {
+        if self.blocks.is_empty() || self.blocks.last().unwrap().len() >= self.block_size {
+            self.blocks.push(Vec::with_capacity(self.block_size));
         }
+        self.blocks.last_mut().unwrap().push(id);
     }
 
     /// Get documents for a term
-    pub fn get_docs(&self, term_id: IdType) -> Vec<IdType> {
-        let mut docs = Vec::new();
-        
-        // Find all blocks for the term
-        let mut current_idx = self.term_to_block.get(&term_id).copied();
-        while let Some(idx) = current_idx {
-            let block = &self.blocks[idx];
-            docs.extend_from_slice(&block.docs);
-            
-            // Check if there's a next block for the same term
-            current_idx = if idx + 1 < self.blocks.len() && self.blocks[idx + 1].term_id == term_id {
-                Some(idx + 1)
-            } else {
-                None
-            };
-        }
-
-        docs
+    pub fn get(&self, block_id: usize) -> Option<&[IdType]> {
+        self.blocks.get(block_id).map(|v| v.as_slice())
     }
 
     /// Get the number of blocks
@@ -90,15 +62,9 @@ impl BlockedInvertedIndex {
         self.blocks.len()
     }
 
-    /// Get the total number of documents
-    pub fn num_docs(&self) -> usize {
-        self.blocks.iter().map(|b| b.size()).sum()
-    }
-
-    /// Clear the index
-    pub fn clear(&mut self) {
-        self.blocks.clear();
-        self.term_to_block.clear();
+    /// Get the block size
+    pub fn block_size(&self) -> usize {
+        self.block_size
     }
 }
 

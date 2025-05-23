@@ -9,21 +9,19 @@ pub struct ScoredByteRange {
 
 /// Manages a pool of scored strings
 pub struct ScoredStringPool {
-    scores: Vec<IdType>,
-    offsets: Vec<usize>,
     data: Vec<u8>,
+    offsets: Vec<usize>,
+    scores: Vec<f32>,
 }
 
 impl ScoredStringPool {
     /// Create a new empty string pool
     pub fn new() -> Self {
-        let mut pool = Self {
-            scores: Vec::new(),
-            offsets: Vec::new(),
+        Self {
             data: Vec::new(),
-        };
-        pool.init();
-        pool
+            offsets: vec![0],
+            scores: Vec::new(),
+        }
     }
 
     /// Initialize the pool
@@ -33,7 +31,7 @@ impl ScoredStringPool {
 
     /// Resize the pool
     pub fn resize(&mut self, num_bytes: usize, k: u32) {
-        self.scores.resize(k as usize, 0);
+        self.scores.resize(k as usize, 0.0);
         self.data.resize(num_bytes, 0);
     }
 
@@ -50,7 +48,9 @@ impl ScoredStringPool {
 
     /// Get the total number of bytes used
     pub fn bytes(&self) -> usize {
-        self.offsets.last().copied().unwrap_or(0)
+        std::mem::size_of_val(&self.data) +
+        std::mem::size_of_val(&self.offsets) +
+        std::mem::size_of_val(&self.scores)
     }
 
     /// Get a mutable reference to the data
@@ -64,25 +64,24 @@ impl ScoredStringPool {
     }
 
     /// Get a mutable reference to the scores
-    pub fn scores_mut(&mut self) -> &mut [IdType] {
+    pub fn scores_mut(&mut self) -> &mut [f32] {
         &mut self.scores
     }
 
     /// Get a reference to the scores
-    pub fn scores(&self) -> &[IdType] {
+    pub fn scores(&self) -> &[f32] {
         &self.scores
     }
 
     /// Get a scored byte range at the given index
-    pub fn get(&self, i: usize) -> ScoredByteRange {
-        assert!(i < self.size());
-        ScoredByteRange {
-            string: ByteRange {
-                begin: unsafe { self.data.as_ptr().add(self.offsets[i]) },
-                end: unsafe { self.data.as_ptr().add(self.offsets[i + 1]) },
-            },
-            score: self.scores[i],
+    pub fn get(&self, index: usize) -> ByteRange {
+        if index >= self.offsets.len() - 1 {
+            return ByteRange::new(0, 0);
         }
+        ByteRange::new(
+            self.offsets[index],
+            self.offsets[index + 1]
+        )
     }
 
     /// Set the offsets vector
@@ -91,13 +90,17 @@ impl ScoredStringPool {
     }
 
     /// Set the scores vector
-    pub fn set_scores(&mut self, scores: Vec<IdType>) {
+    pub fn set_scores(&mut self, scores: Vec<f32>) {
         self.scores = scores;
     }
 
     /// Set the data vector
     pub fn set_data(&mut self, data: Vec<u8>) {
         self.data = data;
+    }
+
+    pub fn get_score(&self, index: usize) -> f32 {
+        self.scores.get(index).copied().unwrap_or(0.0)
     }
 }
 
@@ -134,7 +137,10 @@ impl<'a> Iterator for ScoredStringPoolIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos < self.pool.size() {
-            let item = self.pool.get(self.pos);
+            let item = ScoredByteRange {
+                string: self.pool.get(self.pos),
+                score: self.pool.get_score(self.pos) as IdType,
+            };
             self.pos += 1;
             Some(item)
         } else {

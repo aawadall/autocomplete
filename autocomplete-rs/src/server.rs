@@ -1,15 +1,16 @@
-use std::net::SocketAddr;
 use tonic::{transport::Server as TonicServer, Request, Response, Status};
 use axum::{
     routing::{get, post},
     Router,
     extract::State,
     response::IntoResponse,
-    Json,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use crate::autocomplete::{Autocomplete, Autocomplete2};
+use crate::autocomplete::Autocomplete;
 use crate::graphql::{create_schema, AppSchema};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use hyper::Server;
 
 pub mod autocomplete_proto {
     tonic::include_proto!("autocomplete");
@@ -22,8 +23,9 @@ use autocomplete_proto::{
     StatsRequest, StatsResponse,
 };
 
+#[derive(Clone)]
 pub struct AutocompleteServiceImpl {
-    autocomplete: Autocomplete,
+    autocomplete: Arc<Mutex<Autocomplete>>,
 }
 
 #[tonic::async_trait]
@@ -33,7 +35,8 @@ impl AutocompleteService for AutocompleteServiceImpl {
         request: Request<CompleteRequest>,
     ) -> Result<Response<CompleteResponse>, Status> {
         let req = request.into_inner();
-        let completions = self.autocomplete.complete(&req.prefix);
+        let autocomplete = self.autocomplete.lock().await;
+        let completions = autocomplete.complete(&req.prefix);
         
         let response = CompleteResponse {
             completions: completions.into_iter()
@@ -57,7 +60,8 @@ impl AutocompleteService for AutocompleteServiceImpl {
             .map(|s| (s.text, s.score))
             .collect();
             
-        match self.autocomplete.init(&strings) {
+        let mut autocomplete = self.autocomplete.lock().await;
+        match autocomplete.init(&strings) {
             Ok(_) => Ok(Response::new(InitResponse {
                 success: true,
                 error: String::new(),
@@ -73,9 +77,10 @@ impl AutocompleteService for AutocompleteServiceImpl {
         &self,
         _request: Request<StatsRequest>,
     ) -> Result<Response<StatsResponse>, Status> {
+        let autocomplete = self.autocomplete.lock().await;
         let response = StatsResponse {
-            num_terms: self.autocomplete.num_terms() as i32,
-            memory_bytes: self.autocomplete.bytes() as i64,
+            num_terms: autocomplete.num_terms() as i32,
+            memory_bytes: autocomplete.bytes() as i64,
         };
         
         Ok(Response::new(response))
@@ -96,7 +101,7 @@ async fn graphql_playground() -> impl IntoResponse {
 }
 
 pub async fn run_server(grpc_addr: &str, graphql_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let autocomplete = Autocomplete::new();
+    let autocomplete = Arc::new(Mutex::new(Autocomplete::new()));
     let schema = create_schema(autocomplete.clone());
     
     // Create gRPC service
@@ -121,7 +126,7 @@ pub async fn run_server(grpc_addr: &str, graphql_addr: &str) -> Result<(), Box<d
         TonicServer::builder()
             .add_service(AutocompleteServiceServer::new(grpc_service))
             .serve(grpc_addr),
-        axum::Server::bind(&graphql_addr).serve(app.into_make_service())
+        Server::bind(&graphql_addr).serve(app.into_make_service())
     );
 
     Ok(())

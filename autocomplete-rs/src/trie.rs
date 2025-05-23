@@ -1,182 +1,147 @@
 use std::collections::HashMap;
-use crate::types::{IdType, CompletionType};
+use crate::types::IdType;
 
-/// A node in the completion trie
-pub struct TrieNode {
-    children: HashMap<char, TrieNode>,
-    is_terminal: bool,
-    completion_ids: Vec<IdType>,
+#[derive(Default, Clone)]
+struct TrieNode {
+    children: HashMap<char, Box<TrieNode>>,
+    id: Option<IdType>,
+    score: f32,
 }
 
 impl TrieNode {
-    /// Create a new trie node
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             children: HashMap::new(),
-            is_terminal: false,
-            completion_ids: Vec::new(),
+            id: None,
+            score: 0.0,
         }
     }
 
-    /// Add a child node
-    pub fn add_child(&mut self, c: char) -> &mut TrieNode {
-        self.children.entry(c).or_insert_with(TrieNode::new)
-    }
-
-    /// Get a child node
-    pub fn get_child(&self, c: char) -> Option<&TrieNode> {
-        self.children.get(&c)
-    }
-
-    /// Check if this is a terminal node
-    pub fn is_terminal(&self) -> bool {
-        self.is_terminal
-    }
-
-    /// Set this node as terminal
-    pub fn set_terminal(&mut self) {
-        self.is_terminal = true;
-    }
-
-    /// Add a completion ID
-    pub fn add_completion_id(&mut self, id: IdType) {
-        self.completion_ids.push(id);
-    }
-
-    /// Get completion IDs
-    pub fn completion_ids(&self) -> &[IdType] {
-        &self.completion_ids
+    fn is_terminal(&self) -> bool {
+        self.id.is_some()
     }
 }
 
-/// A trie for prefix-based completion
-pub struct CompletionTrie {
+#[derive(Clone)]
+pub struct Trie {
     root: TrieNode,
-    num_nodes: usize,
-    num_completions: usize,
 }
 
-impl CompletionTrie {
-    /// Create a new completion trie
+impl Trie {
     pub fn new() -> Self {
         Self {
             root: TrieNode::new(),
-            num_nodes: 1,
-            num_completions: 0,
         }
     }
 
-    /// Insert a completion string
-    pub fn insert(&mut self, completion: &str, id: IdType) {
-        let mut node = &mut self.root;
-        for c in completion.chars() {
-            node = node.add_child(c);
-            self.num_nodes += 1;
-        }
-        node.set_terminal();
-        node.add_completion_id(id);
-        self.num_completions += 1;
-    }
-
-    /// Find all completions for a prefix
-    pub fn complete(&self, prefix: &str) -> Vec<IdType> {
-        let mut node = &self.root;
-        for c in prefix.chars() {
-            match node.get_child(c) {
-                Some(next) => node = next,
-                None => return Vec::new(),
-            }
-        }
-        self.collect_completions(node)
-    }
-
-    /// Collect all completion IDs from a node and its children
-    fn collect_completions(&self, node: &TrieNode) -> Vec<IdType> {
-        let mut completions = Vec::new();
-        self.collect_completions_recursive(node, &mut completions);
-        completions
-    }
-
-    /// Recursive helper for collecting completions
-    fn collect_completions_recursive(&self, node: &TrieNode, completions: &mut Vec<IdType>) {
-        if node.is_terminal() {
-            completions.extend_from_slice(node.completion_ids());
-        }
-        for child in node.children.values() {
-            self.collect_completions_recursive(child, completions);
-        }
-    }
-
-    /// Remove a completion string
-    pub fn remove(&mut self, completion: &str) -> bool {
-        let mut chars: Vec<char> = completion.chars().collect();
-        if chars.is_empty() {
-            return false;
-        }
-
-        // First, find if the completion exists and build the path
-        let mut path = Vec::new();
-        let mut current = &self.root;
+    pub fn insert(&mut self, completion: &str, id: IdType, score: f32) {
+        let mut current = &mut self.root;
+        let chars: Vec<char> = completion.chars().collect();
         
         for &c in &chars {
-            match current.get_child(c) {
-                Some(next) => {
-                    path.push(c);
-                    current = next;
-                }
-                None => return false,
+            current = current.children
+                .entry(c)
+                .or_insert_with(|| Box::new(TrieNode::new()));
+        }
+        
+        current.id = Some(id);
+        current.score = score;
+    }
+
+    pub fn remove(&mut self, completion: &str) -> bool {
+        let mut path = Vec::new();
+        let mut current = &mut self.root;
+        
+        // First pass: find the path to the node
+        for c in completion.chars() {
+            if let Some(next) = current.children.get_mut(&c) {
+                path.push(c);
+                current = next;
+            } else {
+                return false; // String not found
             }
         }
-
+        
+        // If the node is not a terminal, the string wasn't in the trie
         if !current.is_terminal() {
             return false;
         }
-
-        // Now remove it by traversing the path again
-        let mut current = &mut self.root;
-        let mut parent = None;
         
-        for &c in &path {
-            if let Some(next) = current.children.get_mut(&c) {
-                parent = Some((c, current));
-                current = next;
-            }
+        // Remove the terminal marker
+        current.id = None;
+        current.score = 0.0;
+        
+        // Second pass: remove empty nodes
+        let mut current = &mut self.root;
+        for &c in &path[..path.len()-1] {
+            current = current.children.get_mut(&c).unwrap();
         }
-
-        // Remove the completion
-        current.completion_ids.clear();
-        current.is_terminal = false;
-        self.num_completions -= 1;
-
-        // Clean up empty nodes
-        while let Some((c, p)) = parent {
-            if current.children.is_empty() && !current.is_terminal() {
-                p.children.remove(&c);
-                self.num_nodes -= 1;
-                current = p;
-                parent = None;
-            } else {
-                break;
-            }
+        
+        // Remove the last node if it's empty
+        if current.children.is_empty() && !current.is_terminal() {
+            current.children.remove(&path[path.len()-1]);
         }
-
+        
         true
     }
 
-    /// Clear the trie
-    pub fn clear(&mut self) {
-        self.root = TrieNode::new();
-        self.num_nodes = 1;
-        self.num_completions = 0;
+    pub fn complete(&self, prefix: &str) -> Vec<(IdType, f32)> {
+        let mut current = &self.root;
+        
+        // Navigate to the prefix node
+        for c in prefix.chars() {
+            if let Some(next) = current.children.get(&c) {
+                current = next;
+            } else {
+                return Vec::new(); // Prefix not found
+            }
+        }
+        
+        // Collect all completions from this node
+        let mut results = Vec::new();
+        self.collect_completions(current, &mut results);
+        results
     }
 
-    /// Get the number of nodes
-    pub fn num_nodes(&self) -> usize {
-        self.num_nodes
+    fn collect_completions(&self, node: &TrieNode, results: &mut Vec<(IdType, f32)>) {
+        if let Some(id) = node.id {
+            results.push((id, node.score));
+        }
+        
+        for child in node.children.values() {
+            self.collect_completions(child, results);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_trie_insert_and_complete() {
+        let mut trie = Trie::new();
+        trie.insert("hello", 1, 1.0);
+        trie.insert("help", 2, 0.8);
+        trie.insert("world", 3, 0.5);
+        
+        let completions = trie.complete("hel");
+        assert_eq!(completions.len(), 2);
+        assert!(completions.contains(&(1, 1.0)));
+        assert!(completions.contains(&(2, 0.8)));
     }
 
-    /// Get the number of completions
-    pub fn num_completions(&self) -> usize {
-        self.num_completions
+    #[test]
+    fn test_trie_remove() {
+        let mut trie = Trie::new();
+        trie.insert("hello", 1, 1.0);
+        trie.insert("help", 2, 0.8);
+        
+        assert!(trie.remove("hello"));
+        assert!(!trie.remove("hello")); // Already removed
+        assert!(trie.remove("help"));
+        
+        let completions = trie.complete("hel");
+        assert_eq!(completions.len(), 0);
     }
 } 

@@ -1,43 +1,117 @@
-# Autocomplete-rs
+# Autocomplete Service
 
-This project is a Rust port of the original C++ autocomplete system. The goal is to maintain the same functionality while leveraging Rust's safety guarantees and modern tooling.
+A high-performance autocomplete service written in Rust, supporting both gRPC and GraphQL interfaces.
+
+## Features
+
+- **Dual API Support**
+  - gRPC interface for high-performance RPC calls
+  - GraphQL interface for flexible querying
+  - Shared backend implementation for both APIs
+
+- **Core Features**
+  - Fast prefix-based autocomplete
+  - Score-based ranking of suggestions
+  - Memory-efficient string storage
+  - Concurrent request handling
+
+- **API Endpoints**
+  - gRPC: `[::1]:50051` (configurable)
+  - GraphQL: `[::1]:8000/graphql` (configurable)
+  - GraphQL Playground: `[::1]:8000/playground`
 
 ## Project Status
 
-Currently, we are in the process of porting the core components from C++ to Rust. The following components have been ported:
+### Completed
+- ✅ Basic autocomplete implementation
+- ✅ gRPC server implementation
+- ✅ GraphQL server implementation
+- ✅ Command-line configuration
+- ✅ Shared backend between APIs
 
-- Basic constants and configuration
-- Parameters management
-- Performance measurement probes
+### In Progress
+- 🔄 Documentation
+- 🔄 Testing suite
+- 🔄 Performance benchmarks
 
-## Next Steps
+### Planned
+- ⏳ Authentication
+- ⏳ Rate limiting
+- ⏳ Metrics and monitoring
+- ⏳ Docker support
+- ⏳ Client examples in multiple languages
 
-1. Continue porting core components:
-   - Scored string pool
-   - Completion trie
-   - Blocked inverted index
-   - Front-coded dictionary
+## Getting Started
 
-2. Port and adapt unit tests to ensure functionality matches the original implementation
+### Prerequisites
+- Rust 1.70 or later
+- Cargo
 
-3. Containerize the application using Docker for easy deployment and testing
-
-## Building and Testing
-
+### Building
 ```bash
-# Build the project
-cargo build
-
-# Run tests
-cargo test
-
-# Run with specific test
-cargo test test_name -- --nocapture
+cargo build --release
 ```
 
-## Original Project
+### Running
+```bash
+# Default configuration
+cargo run
 
-This is a port of the original C++ autocomplete system, which provides efficient string completion functionality. The original implementation can be found in the `archive` directory.
+# Custom addresses
+cargo run -- --grpc-addr 127.0.0.1:50051 --graphql-addr 127.0.0.1:8000
+
+# Show help
+cargo run -- --help
+```
+
+## API Usage
+
+### gRPC
+```protobuf
+service AutocompleteService {
+    rpc Complete(CompleteRequest) returns (CompleteResponse);
+    rpc Init(InitRequest) returns (InitResponse);
+    rpc GetStats(StatsRequest) returns (StatsResponse);
+}
+```
+
+### GraphQL
+```graphql
+type Query {
+    complete(prefix: String!, maxResults: Int): CompleteResponse!
+    stats: StatsResponse!
+}
+
+type Mutation {
+    init(strings: [StringInput!]!): InitResponse!
+}
+```
+
+## Project Structure
+
+```
+autocomplete-rs/
+├── src/
+│   ├── main.rs           # Entry point and CLI
+│   ├── autocomplete.rs   # Core autocomplete logic
+│   ├── graphql.rs        # GraphQL schema and resolvers
+│   ├── server.rs         # Server implementations
+│   ├── string_pool.rs    # String interning
+│   ├── trie.rs          # Trie data structure
+│   └── types.rs         # Common types
+├── proto/
+│   └── autocomplete.proto # gRPC service definition
+└── schema/
+    └── schema.graphql    # GraphQL schema
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
